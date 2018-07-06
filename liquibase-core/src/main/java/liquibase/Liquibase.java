@@ -1,10 +1,56 @@
 package liquibase;
 
+import static java.util.ResourceBundle.getBundle;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
+import java.io.Writer;
+import java.text.DateFormat;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.List;
+import java.util.ResourceBundle;
+import java.util.Set;
+
+import javax.xml.parsers.ParserConfigurationException;
+
 import liquibase.change.CheckSum;
 import liquibase.change.core.RawSQLChange;
-import liquibase.changelog.*;
-import liquibase.changelog.filter.*;
-import liquibase.changelog.visitor.*;
+import liquibase.changelog.ChangeLogHistoryService;
+import liquibase.changelog.ChangeLogHistoryServiceFactory;
+import liquibase.changelog.ChangeLogIterator;
+import liquibase.changelog.ChangeLogParameters;
+import liquibase.changelog.ChangeSet;
+import liquibase.changelog.ChangeSetStatus;
+import liquibase.changelog.DatabaseChangeLog;
+import liquibase.changelog.RanChangeSet;
+import liquibase.changelog.filter.AfterTagChangeSetFilter;
+import liquibase.changelog.filter.AlreadyRanChangeSetFilter;
+import liquibase.changelog.filter.ChangeSetFilter;
+import liquibase.changelog.filter.ChangeSetFilterResult;
+import liquibase.changelog.filter.ContextChangeSetFilter;
+import liquibase.changelog.filter.CountChangeSetFilter;
+import liquibase.changelog.filter.DbmsChangeSetFilter;
+import liquibase.changelog.filter.ExecutedAfterChangeSetFilter;
+import liquibase.changelog.filter.IgnoreChangeSetFilter;
+import liquibase.changelog.filter.LabelChangeSetFilter;
+import liquibase.changelog.filter.NotRanChangeSetFilter;
+import liquibase.changelog.filter.ShouldRunChangeSetFilter;
+import liquibase.changelog.filter.UpToTagChangeSetFilter;
+import liquibase.changelog.visitor.ChangeExecListener;
+import liquibase.changelog.visitor.ChangeLogSyncListener;
+import liquibase.changelog.visitor.ChangeLogSyncVisitor;
+import liquibase.changelog.visitor.ChangeSetVisitor;
+import liquibase.changelog.visitor.DBDocVisitor;
+import liquibase.changelog.visitor.ExpectedChangesVisitor;
+import liquibase.changelog.visitor.ListVisitor;
+import liquibase.changelog.visitor.RollbackVisitor;
+import liquibase.changelog.visitor.StatusVisitor;
+import liquibase.changelog.visitor.UpdateVisitor;
 import liquibase.command.CommandExecutionException;
 import liquibase.command.CommandFactory;
 import liquibase.command.core.DropAllCommand;
@@ -12,8 +58,6 @@ import liquibase.database.Database;
 import liquibase.database.DatabaseConnection;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.ObjectQuotingStrategy;
-import liquibase.database.core.MSSQLDatabase;
-import liquibase.database.core.OracleDatabase;
 import liquibase.diff.DiffGeneratorFactory;
 import liquibase.diff.DiffResult;
 import liquibase.diff.compare.CompareControl;
@@ -39,20 +83,10 @@ import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
 import liquibase.snapshot.SnapshotControl;
 import liquibase.snapshot.SnapshotGeneratorFactory;
-import liquibase.statement.core.RawSqlStatement;
 import liquibase.statement.core.UpdateStatement;
 import liquibase.structure.DatabaseObject;
-import liquibase.structure.core.Catalog;
-import liquibase.util.LiquibaseUtil;
 import liquibase.util.StreamUtil;
 import liquibase.util.StringUtils;
-
-import javax.xml.parsers.ParserConfigurationException;
-import java.io.*;
-import java.text.DateFormat;
-import java.util.*;
-
-import static java.util.ResourceBundle.getBundle;
 
 /**
  * Primary facade class for interacting with Liquibase.
@@ -188,7 +222,7 @@ public class Liquibase {
 
         try {
             DatabaseChangeLog changeLog = getDatabaseChangeLog();
-            
+
             if (checkLiquibaseTables) {
                 checkLiquibaseTables(true, changeLog, contexts, labelExpression);
             }
@@ -250,7 +284,7 @@ public class Liquibase {
     public void update(Contexts contexts, LabelExpression labelExpression, Writer output) throws LiquibaseException {
         update(contexts, labelExpression, output, true);
     }
-    
+
     public void update(Contexts contexts, LabelExpression labelExpression, Writer output, boolean checkLiquibaseTables)
             throws LiquibaseException {
         changeLogParameters.setContexts(contexts);
@@ -264,7 +298,8 @@ public class Liquibase {
         );
         ExecutorService.getInstance().setExecutor(database, loggingExecutor);
 
-        outputHeader("Update Database Script");
+        outputHeader("+goose Up");
+        outputHeader("SQL in this section is executed when the migration is applied.");
 
         LockService lockService = LockServiceFactory.getInstance().getLockService(database);
         lockService.waitForLock();
@@ -438,31 +473,31 @@ public class Liquibase {
     }
 
     private void outputHeader(String message) throws DatabaseException {
-        Executor executor = ExecutorService.getInstance().getExecutor(database);
-        executor.comment("*********************************************************************");
-        executor.comment(message);
-        executor.comment("*********************************************************************");
-        executor.comment("Change Log: " + changeLogFile);
-        executor.comment("Ran at: " +
-            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date())
-        );
-        DatabaseConnection connection = getDatabase().getConnection();
-        if (connection != null) {
-            executor.comment("Against: " + connection.getConnectionUserName() + "@" + connection.getURL());
-        }
-        executor.comment("Liquibase version: " + LiquibaseUtil.getBuildVersion());
-        executor.comment("*********************************************************************" +
-            StreamUtil.getLineSeparator()
-        );
-
-        if (database instanceof OracleDatabase) {
-            executor.execute(new RawSqlStatement("SET DEFINE OFF;"));
-        }
-        if ((database instanceof MSSQLDatabase) && (database.getDefaultCatalogName() != null)) {
-            executor.execute(new RawSqlStatement("USE " +
-                database.escapeObjectName(database.getDefaultCatalogName(), Catalog.class) + ";")
-            );
-        }
+          Executor executor = ExecutorService.getInstance().getExecutor(database);
+//        executor.comment("*********************************************************************");
+          executor.comment(message);
+//        executor.comment("*********************************************************************");
+//        executor.comment("Change Log: " + changeLogFile);
+//        executor.comment("Ran at: " +
+//            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(new Date())
+//        );
+//        DatabaseConnection connection = getDatabase().getConnection();
+//        if (connection != null) {
+//            executor.comment("Against: " + connection.getConnectionUserName() + "@" + connection.getURL());
+//        }
+//        executor.comment("Liquibase version: " + LiquibaseUtil.getBuildVersion());
+//        executor.comment("*********************************************************************" +
+//            StreamUtil.getLineSeparator()
+//        );
+//
+//        if (database instanceof OracleDatabase) {
+//            executor.execute(new RawSqlStatement("SET DEFINE OFF;"));
+//        }
+//        if ((database instanceof MSSQLDatabase) && (database.getDefaultCatalogName() != null)) {
+//            executor.execute(new RawSqlStatement("USE " +
+//                database.escapeObjectName(database.getDefaultCatalogName(), Catalog.class) + ";")
+//            );
+//        }
     }
 
     public void rollback(int changesToRollback, String contexts, Writer output) throws LiquibaseException {
@@ -499,7 +534,8 @@ public class Liquibase {
             new LoggingExecutor(ExecutorService.getInstance().getExecutor(database), output, database)
         );
 
-        outputHeader("Rollback " + changesToRollback + " Change(s) Script");
+        outputHeader("+goose Down");
+        outputHeader("SQL in this section is executed when the migration is rolled back.");
 
         rollback(changesToRollback, rollbackScript, contexts, labelExpression);
 
@@ -587,7 +623,7 @@ public class Liquibase {
         String rollbackScriptContents;
         try {
             Set<InputStream> streams = resourceAccessor.getResourcesAsStream(rollbackScript);
-            if ((streams == null) || streams.isEmpty()) {
+            if (streams == null || streams.isEmpty()) {
                 throw new LiquibaseException("Cannot find rollbackScript "+rollbackScript);
             } else if (streams.size() > 1) {
                 throw new LiquibaseException("Found multiple rollbackScripts named "+rollbackScript);
@@ -970,12 +1006,12 @@ public class Liquibase {
     public void futureRollbackSQL(String contexts, Writer output) throws LiquibaseException {
         futureRollbackSQL(null, contexts, output, true);
     }
-    
+
     public void futureRollbackSQL(Writer output) throws LiquibaseException {
         futureRollbackSQL(null, null, new Contexts(), new LabelExpression(), output);
     }
 
-    public void futureRollbackSQL(String contexts, Writer output, boolean checkLiquibaseTables) 
+    public void futureRollbackSQL(String contexts, Writer output, boolean checkLiquibaseTables)
            throws LiquibaseException {
         futureRollbackSQL(null, contexts, output, checkLiquibaseTables);
     }
@@ -983,13 +1019,13 @@ public class Liquibase {
     public void futureRollbackSQL(Integer count, String contexts, Writer output) throws LiquibaseException {
         futureRollbackSQL(count, new Contexts(contexts), new LabelExpression(), output, true);
     }
-    
+
     public void futureRollbackSQL(Contexts contexts, LabelExpression labelExpression, Writer output)
         throws LiquibaseException {
         futureRollbackSQL(null, null, contexts, labelExpression, output);
     }
 
-    public void futureRollbackSQL(Integer count, String contexts, Writer output, boolean checkLiquibaseTables) 
+    public void futureRollbackSQL(Integer count, String contexts, Writer output, boolean checkLiquibaseTables)
            throws LiquibaseException {
         futureRollbackSQL(count, new Contexts(contexts), new LabelExpression(), output, checkLiquibaseTables);
     }
@@ -1024,7 +1060,8 @@ public class Liquibase {
         Executor oldTemplate = ExecutorService.getInstance().getExecutor(database);
         ExecutorService.getInstance().setExecutor(database, outputTemplate);
 
-        outputHeader("SQL to roll back currently unexecuted changes");
+        outputHeader("+goose Down");
+        outputHeader("SQL in this section is executed when the migration is rolled back.");
 
         LockService lockService = LockServiceFactory.getInstance().getLockService(database);
         lockService.waitForLock();
@@ -1039,7 +1076,7 @@ public class Liquibase {
             changeLog.validate(database, contexts, labelExpression);
 
             ChangeLogIterator logIterator;
-            if ((count == null) && (tag == null)) {
+            if (count == null && tag == null) {
                 logIterator = new ChangeLogIterator(changeLog,
                         new NotRanChangeSetFilter(database.getRanChangeSetList()),
                         new ContextChangeSetFilter(contexts),
@@ -1137,7 +1174,7 @@ public class Liquibase {
      * Drops all database objects in the passed schema(s).
      */
     public final void dropAll(CatalogAndSchema... schemas) throws DatabaseException {
-        if ((schemas == null) || (schemas.length == 0)) {
+        if (schemas == null || schemas.length == 0) {
             schemas = new CatalogAndSchema[] {
                 new CatalogAndSchema(getDatabase().getDefaultCatalogName(), getDatabase().getDefaultSchemaName())
             };
@@ -1467,7 +1504,7 @@ public class Liquibase {
             throw new LiquibaseException(new IllegalArgumentException("changeSetIdentifier"));
         }
         final List<String> parts = StringUtils.splitAndTrim(changeSetIdentifier, "::");
-        if ((parts == null) || (parts.size() < CHANGESET_ID_NUM_PARTS)) {
+        if (parts == null || parts.size() < CHANGESET_ID_NUM_PARTS) {
             throw new LiquibaseException(
                 new IllegalArgumentException("Invalid changeSet identifier: " + changeSetIdentifier)
             );
@@ -1587,7 +1624,7 @@ public class Liquibase {
         throws DatabaseException, IOException, ParserConfigurationException {
 
         Set<Class<? extends DatabaseObject>> finalCompareTypes = null;
-        if ((snapshotTypes != null) && (snapshotTypes.length > 0)) {
+        if (snapshotTypes != null && snapshotTypes.length > 0) {
             finalCompareTypes = new HashSet<>(Arrays.asList(snapshotTypes));
         }
 
