@@ -1,5 +1,11 @@
 package liquibase.executor;
 
+import java.io.IOException;
+import java.io.Writer;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
 import liquibase.database.Database;
 import liquibase.database.core.MSSQLDatabase;
 import liquibase.database.core.OracleDatabase;
@@ -11,14 +17,13 @@ import liquibase.sql.visitor.SqlVisitor;
 import liquibase.sqlgenerator.SqlGeneratorFactory;
 import liquibase.statement.ExecutablePreparedStatement;
 import liquibase.statement.SqlStatement;
-import liquibase.statement.core.*;
+import liquibase.statement.core.CreateProcedureStatement;
+import liquibase.statement.core.GetNextChangeSetSequenceValueStatement;
+import liquibase.statement.core.LockDatabaseChangeLogStatement;
+import liquibase.statement.core.RawSqlStatement;
+import liquibase.statement.core.SelectFromDatabaseChangeLogLockStatement;
+import liquibase.statement.core.UnlockDatabaseChangeLogStatement;
 import liquibase.util.StreamUtil;
-
-import java.io.IOException;
-import java.io.Writer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 
 /**
  * A variant of the Executor service that does not actually modify the target database(s). Instead, it creates
@@ -54,7 +59,7 @@ public class LoggingExecutor extends AbstractExecutor {
     public int update(SqlStatement sql) throws DatabaseException {
         outputStatement(sql);
 
-        if ((sql instanceof LockDatabaseChangeLogStatement) || (sql instanceof UnlockDatabaseChangeLogStatement)) {
+        if (sql instanceof LockDatabaseChangeLogStatement || sql instanceof UnlockDatabaseChangeLogStatement) {
             return 1;
         }
 
@@ -104,6 +109,10 @@ public class LoggingExecutor extends AbstractExecutor {
                     continue;
                 }
 
+                if (statement.toUpperCase().contains("DATABASECHANGELOG")) {
+                    continue;
+                }
+
                 //remove trailing "/"
                 if (database instanceof OracleDatabase) {
                     //all trailing "/"s
@@ -114,8 +123,8 @@ public class LoggingExecutor extends AbstractExecutor {
 
                 output.write(statement);
 
-                if ((database instanceof MSSQLDatabase) || (database instanceof SybaseDatabase) || (database
-                    instanceof SybaseASADatabase)) {
+                if (database instanceof MSSQLDatabase || database instanceof SybaseDatabase || database
+                    instanceof SybaseASADatabase) {
                     output.write(StreamUtil.getLineSeparator());
                     output.write("GO");
                 } else {
@@ -221,7 +230,7 @@ public class LoggingExecutor extends AbstractExecutor {
     public boolean updatesDatabase() {
         return false;
     }
-    
+
     private class NoopWriter extends Writer {
 
         @Override
@@ -241,5 +250,5 @@ public class LoggingExecutor extends AbstractExecutor {
 
     }
 
-    
+
 }
