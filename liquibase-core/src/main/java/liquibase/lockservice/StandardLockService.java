@@ -1,5 +1,14 @@
 package liquibase.lockservice;
 
+import static java.util.ResourceBundle.getBundle;
+
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.ResourceBundle;
+
 import liquibase.configuration.GlobalConfiguration;
 import liquibase.configuration.LiquibaseConfiguration;
 import liquibase.database.Database;
@@ -19,13 +28,14 @@ import liquibase.snapshot.SnapshotGeneratorFactory;
 import liquibase.sql.Sql;
 import liquibase.sqlgenerator.SqlGeneratorFactory;
 import liquibase.statement.SqlStatement;
-import liquibase.statement.core.*;
+import liquibase.statement.core.CreateDatabaseChangeLogLockTableStatement;
+import liquibase.statement.core.DropTableStatement;
+import liquibase.statement.core.InitializeDatabaseChangeLogLockTableStatement;
+import liquibase.statement.core.LockDatabaseChangeLogStatement;
+import liquibase.statement.core.RawSqlStatement;
+import liquibase.statement.core.SelectFromDatabaseChangeLogLockStatement;
+import liquibase.statement.core.UnlockDatabaseChangeLogStatement;
 import liquibase.structure.core.Table;
-
-import java.text.DateFormat;
-import java.util.*;
-
-import static java.util.ResourceBundle.getBundle;
 
 public class StandardLockService implements LockService {
     private static ResourceBundle coreBundle = getBundle("liquibase/i18n/liquibase-core");
@@ -93,7 +103,7 @@ public class StandardLockService implements LockService {
 
         if (!hasDatabaseChangeLogLockTable()) {
             try {
-                executor.comment("Create Database Lock Table");
+                // executor.comment("Create Database Lock Table");
                 executor.execute(new CreateDatabaseChangeLogLockTableStatement());
                 database.commit();
                 LogService.getLog(getClass()).debug(
@@ -105,7 +115,7 @@ public class StandardLockService implements LockService {
                                 )
                 );
             } catch (DatabaseException e) {
-                if ((e.getMessage() != null) && e.getMessage().contains("exists")) {
+                if (e.getMessage() != null && e.getMessage().contains("exists")) {
                     //hit a race condition where the table got created by another node.
                     LogService.getLog(getClass()).debug(LogType.LOG, "Database lock table already appears to exist " +
                             "due to exception: " + e.getMessage() + ". Continuing on");
@@ -119,12 +129,12 @@ public class StandardLockService implements LockService {
         }
 
         if (!isDatabaseChangeLogLockTableInitialized(createdTable)) {
-            executor.comment("Initialize Database Lock Table");
+            // executor.comment("Initialize Database Lock Table");
             executor.execute(new InitializeDatabaseChangeLogLockTableStatement());
             database.commit();
         }
 
-        if (executor.updatesDatabase() && (database instanceof DerbyDatabase) && ((DerbyDatabase) database)
+        if (executor.updatesDatabase() && database instanceof DerbyDatabase && ((DerbyDatabase) database)
             .supportsBooleanDataType()) {
             //check if the changelog table is of an old smallint vs. boolean format
             String lockTable = database.escapeTableName(
@@ -202,8 +212,8 @@ public class StandardLockService implements LockService {
     public void waitForLock() throws LockException {
 
         boolean locked = false;
-        long timeToGiveUp = new Date().getTime() + (getChangeLogLockWaitTime() * 1000 * 60);
-        while (!locked && (new Date().getTime() < timeToGiveUp)) {
+        long timeToGiveUp = new Date().getTime() + getChangeLogLockWaitTime() * 1000 * 60;
+        while (!locked && new Date().getTime() < timeToGiveUp) {
             locked = acquireLock();
             if (!locked) {
                 LogService.getLog(getClass()).info(LogType.LOG, "Waiting for changelog lock....");
@@ -253,9 +263,9 @@ public class StandardLockService implements LockService {
                 return false;
             } else {
 
-                executor.comment("Lock Database");
+                // executor.comment("Lock Database");
                 int rowsUpdated = executor.update(new LockDatabaseChangeLogStatement());
-                if ((rowsUpdated == -1) && (database instanceof MSSQLDatabase)) {
+                if (rowsUpdated == -1 && database instanceof MSSQLDatabase) {
                     LogService.getLog(getClass()).debug(
                             LogType.LOG, "Database did not return a proper row count (Might have NOCOUNT enabled)"
                     );
@@ -308,10 +318,10 @@ public class StandardLockService implements LockService {
         Executor executor = ExecutorService.getInstance().getExecutor(database);
         try {
             if (this.hasDatabaseChangeLogLockTable()) {
-                executor.comment("Release Database Lock");
+                // executor.comment("Release Database Lock");
                 database.rollback();
                 int updatedRows = executor.update(new UnlockDatabaseChangeLogStatement());
-                if ((updatedRows == -1) && (database instanceof MSSQLDatabase)) {
+                if (updatedRows == -1 && database instanceof MSSQLDatabase) {
                     LogService.getLog(getClass()).debug(
                             LogType.LOG, "Database did not return a proper row count (Might have NOCOUNT enabled.)"
                     );
@@ -384,7 +394,7 @@ public class StandardLockService implements LockService {
                 } else {
                     locked = (Boolean) lockedValue;
                 }
-                if ((locked != null) && locked) {
+                if (locked != null && locked) {
                     allLocks.add(
                             new DatabaseChangeLogLock(
                                     ((Number) columnMap.get("ID")).intValue(),
