@@ -1,5 +1,30 @@
 package liquibase.serializer.core.xml;
 
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+
 import liquibase.change.ColumnConfig;
 import liquibase.change.ConstraintsConfig;
 import liquibase.changelog.ChangeLogChild;
@@ -18,13 +43,6 @@ import liquibase.util.StreamUtil;
 import liquibase.util.StringUtils;
 import liquibase.util.XMLUtil;
 import liquibase.util.xml.DefaultXmlWriter;
-import org.w3c.dom.*;
-
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import java.io.*;
-import java.util.*;
 
 public class XMLChangeLogSerializer implements ChangeLogSerializer {
 
@@ -98,7 +116,7 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
                 if (details.supports(this, namespace)) {
                     String shortName = details.getShortName(namespace);
                     String url = details.getSchemaUrl(namespace);
-                    if ((shortName != null) && (url != null)) {
+                    if (shortName != null && url != null) {
                         shortNameByNamespace.put(namespace, shortName);
                         urlByNamespace.put(namespace, url);
                     }
@@ -164,7 +182,7 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
         String nodeName = object.getSerializedObjectName();
 
         NamespaceDetails details = NamespaceDetailsFactory.getInstance().getNamespaceDetails(this, namespace);
-        if ((details != null) && !"".equals(details.getShortName(namespace))) {
+        if (details != null && !"".equals(details.getShortName(namespace))) {
             nodeName = details.getShortName(namespace) + ":" + nodeName;
         }
         Element node = currentChangeLogFileDOM.createElementNS(namespace, nodeName);
@@ -228,7 +246,11 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
             } else {
                 String attributeName = qualifyName(objectName, objectNamespace, parentNamespace);
                 try {
-                    node.setAttribute(attributeName, checkString(value.toString()));
+                    String v = checkString(value.toString());
+                    if (attributeName != null && "type".equals(attributeName) && "BIT".equals(v)) {
+                        v = "TINYINT(1)";
+                    }
+                    node.setAttribute(attributeName, v);
                 } catch (UnexpectedLiquibaseException e) {
                     if (e.getMessage().startsWith(INVALID_STRING_ENCODING_MESSAGE)) {
                         throw new UnexpectedLiquibaseException(e.getMessage() + " on " + node.getTagName() + "." + attributeName + ". To resolve, remove the invalid character on the database and try again");
@@ -259,15 +281,15 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
             } else {
                 codePoint = current;
             }
-            if ((codePoint == '\n')
-                    || (codePoint == '\r')
-                    || (codePoint == '\t')
-                    || (codePoint == 0xB)
-                    || (codePoint == 0xC)
-                    || ((codePoint >= 0x20) && (codePoint <= 0x7E))
-                    || ((codePoint >= 0xA0) && (codePoint <= 0xD7FF))
-                    || ((codePoint >= 0xE000) && (codePoint <= 0xFFFD))
-                    || ((codePoint >= 0x10000) && (codePoint <= 0x10FFFF))
+            if (codePoint == '\n'
+                    || codePoint == '\r'
+                    || codePoint == '\t'
+                    || codePoint == 0xB
+                    || codePoint == 0xC
+                    || codePoint >= 0x20 && codePoint <= 0x7E
+                    || codePoint >= 0xA0 && codePoint <= 0xD7FF
+                    || codePoint >= 0xE000 && codePoint <= 0xFFFD
+                    || codePoint >= 0x10000 && codePoint <= 0x10FFFF
                     ) {
                 //ok
             } else {
@@ -279,7 +301,7 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
     }
 
     private String qualifyName(String objectName, String objectNamespace, String parentNamespace) {
-        if ((objectNamespace != null) && !objectNamespace.equals(LiquibaseSerializable.STANDARD_CHANGELOG_NAMESPACE)
+        if (objectNamespace != null && !objectNamespace.equals(LiquibaseSerializable.STANDARD_CHANGELOG_NAMESPACE)
             && !objectNamespace.equals(parentNamespace)) {
             NamespaceDetails details = NamespaceDetailsFactory.getInstance().getNamespaceDetails(this, objectNamespace);
             return details.getShortName(objectNamespace) + ":" + objectName;
@@ -348,7 +370,7 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
             element.setAttribute("remarks", columnConfig.getRemarks());
         }
 
-        if ((columnConfig.isAutoIncrement() != null) && columnConfig.isAutoIncrement()) {
+        if (columnConfig.isAutoIncrement() != null && columnConfig.isAutoIncrement()) {
             element.setAttribute("autoIncrement", "true");
         }
 
@@ -435,7 +457,7 @@ public class XMLChangeLogSerializer implements ChangeLogSerializer {
         for (Map.Entry entry : attributeMap.entrySet()) {
             String value = (String) entry.getValue();
             if (value != null) {
-                if ((indent >= 0) && !firstAttribute && (attributeMap.size() > 2)) {
+                if (indent >= 0 && !firstAttribute && attributeMap.size() > 2) {
                     buffer.append("\n").append(StringUtils.repeat(" ", indent)).append("        ");
                 } else {
                     buffer.append(" ");
