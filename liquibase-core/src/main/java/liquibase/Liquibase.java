@@ -58,6 +58,7 @@ import liquibase.database.Database;
 import liquibase.database.DatabaseConnection;
 import liquibase.database.DatabaseFactory;
 import liquibase.database.ObjectQuotingStrategy;
+import liquibase.database.core.MySQLDatabase;
 import liquibase.diff.DiffGeneratorFactory;
 import liquibase.diff.DiffResult;
 import liquibase.diff.compare.CompareControl;
@@ -83,6 +84,7 @@ import liquibase.snapshot.DatabaseSnapshot;
 import liquibase.snapshot.InvalidExampleException;
 import liquibase.snapshot.SnapshotControl;
 import liquibase.snapshot.SnapshotGeneratorFactory;
+import liquibase.statement.core.RawSqlStatement;
 import liquibase.statement.core.UpdateStatement;
 import liquibase.structure.DatabaseObject;
 import liquibase.util.StreamUtil;
@@ -221,6 +223,9 @@ public class Liquibase {
         changeLogParameters.setLabels(labelExpression);
 
         try {
+
+            disableForeignKeyCheck();
+
             DatabaseChangeLog changeLog = getDatabaseChangeLog();
 
             if (checkLiquibaseTables) {
@@ -234,6 +239,9 @@ public class Liquibase {
             ChangeLogIterator changeLogIterator = getStandardChangelogIterator(contexts, labelExpression, changeLog);
 
             changeLogIterator.run(createUpdateVisitor(), new RuntimeEnvironment(database, contexts, labelExpression));
+
+            enableForeignKeyCheck();
+
         } finally {
             database.setObjectQuotingStrategy(ObjectQuotingStrategy.LEGACY);
             try {
@@ -498,6 +506,20 @@ public class Liquibase {
 //                database.escapeObjectName(database.getDefaultCatalogName(), Catalog.class) + ";")
 //            );
 //        }
+    }
+
+    private void disableForeignKeyCheck() throws DatabaseException {
+        Executor executor = ExecutorService.getInstance().getExecutor(database);
+        if (database instanceof MySQLDatabase) {
+            executor.execute(new RawSqlStatement("SET FOREIGN_KEY_CHECKS=0;"));
+        }
+    }
+
+    private void enableForeignKeyCheck() throws DatabaseException {
+        Executor executor = ExecutorService.getInstance().getExecutor(database);
+        if (database instanceof MySQLDatabase) {
+            executor.execute(new RawSqlStatement("SET FOREIGN_KEY_CHECKS=1;"));
+        }
     }
 
     public void rollback(int changesToRollback, String contexts, Writer output) throws LiquibaseException {
@@ -1067,6 +1089,9 @@ public class Liquibase {
         lockService.waitForLock();
 
         try {
+
+            disableForeignKeyCheck();
+
             DatabaseChangeLog changeLog = getDatabaseChangeLog();
             if (checkLiquibaseTables) {
                 checkLiquibaseTables(false, changeLog, contexts, labelExpression);
@@ -1139,6 +1164,9 @@ public class Liquibase {
             logIterator.run(createRollbackVisitor(),
                 new RuntimeEnvironment(database, contexts, labelExpression)
             );
+
+            enableForeignKeyCheck();
+
         } finally {
             try {
                 lockService.releaseLock();
