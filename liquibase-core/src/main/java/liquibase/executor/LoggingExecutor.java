@@ -81,7 +81,7 @@ public class LoggingExecutor extends AbstractExecutor {
     public void comment(String message) throws DatabaseException {
         try {
             output.write(database.getLineComment());
-            output.write(" ");
+            // output.write(" ");
             output.write(message);
             output.write(StreamUtil.getLineSeparator());
         } catch (IOException e) {
