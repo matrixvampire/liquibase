@@ -3,8 +3,10 @@ package liquibase.executor;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import liquibase.database.Database;
 import liquibase.database.core.MSSQLDatabase;
@@ -35,6 +37,7 @@ public class LoggingExecutor extends AbstractExecutor {
 
     private Writer output;
     private Executor delegatedReadExecutor;
+    private Set<String> statements;
 
     public LoggingExecutor(Executor delegatedExecutor, Writer output, Database database) {
         if (output != null) {
@@ -44,6 +47,7 @@ public class LoggingExecutor extends AbstractExecutor {
         }
         this.delegatedReadExecutor = delegatedExecutor;
         setDatabase(database);
+        this.statements = new HashSet<>();
     }
 
     protected Writer getOutput() {
@@ -121,7 +125,11 @@ public class LoggingExecutor extends AbstractExecutor {
                     }
                 }
 
-                output.write(statement);
+                boolean add = false;
+                if (statements.add(statement)) {
+                    output.write(statement);
+                    add = true;
+                }
 
                 if (database instanceof MSSQLDatabase || database instanceof SybaseDatabase || database
                     instanceof SybaseASADatabase) {
@@ -151,12 +159,14 @@ public class LoggingExecutor extends AbstractExecutor {
                     endDelimiter = endDelimiter.replace("\\r", "\r");
 
 
-                    if (!statement.endsWith(endDelimiter)) {
+                    if (!statement.endsWith(endDelimiter) && add) {
                         output.write(endDelimiter);
                     }
                 }
-                output.write(StreamUtil.getLineSeparator());
-                output.write(StreamUtil.getLineSeparator());
+                if (add) {
+                    output.write(StreamUtil.getLineSeparator());
+                    output.write(StreamUtil.getLineSeparator());
+                }
             }
         } catch (IOException e) {
             throw new DatabaseException(e);
