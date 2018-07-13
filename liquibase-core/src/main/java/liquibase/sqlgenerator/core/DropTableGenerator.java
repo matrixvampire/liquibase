@@ -1,6 +1,7 @@
 package liquibase.sqlgenerator.core;
 
 import liquibase.database.Database;
+import liquibase.database.core.MySQLDatabase;
 import liquibase.database.core.OracleDatabase;
 import liquibase.exception.ValidationErrors;
 import liquibase.sql.Sql;
@@ -22,7 +23,14 @@ public class DropTableGenerator extends AbstractSqlGenerator<DropTableStatement>
     @Override
     public Sql[] generateSql(DropTableStatement statement, Database database, SqlGeneratorChain sqlGeneratorChain) {
         StringBuffer buffer = new StringBuffer();
-        buffer.append("DROP TABLE ").append(database.escapeTableName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName()));
+
+        String prefix = "DROP TABLE ";
+        if (database instanceof MySQLDatabase) {
+            prefix = "DROP TABLE IF EXISTS ";
+        }
+        buffer.append(prefix);
+
+        buffer.append(database.escapeTableName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName()));
         if (statement.isCascadeConstraints()) {
             if (database.supportsDropTableCascadeConstraints()) {
                 if (database instanceof OracleDatabase) {
