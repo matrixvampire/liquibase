@@ -1,12 +1,13 @@
 package liquibase.statement;
 
 
+import java.util.List;
+
 import liquibase.change.ColumnConfig;
 import liquibase.changelog.ChangeSet;
 import liquibase.database.Database;
+import liquibase.database.core.MySQLDatabase;
 import liquibase.resource.ResourceAccessor;
-
-import java.util.List;
 
 /**
  * Handles INSERT Execution
@@ -26,7 +27,13 @@ public class InsertExecutablePreparedStatement extends ExecutablePreparedStateme
 
     @Override
     protected String generateSql(List<ColumnConfig> cols) {
-        StringBuilder sql = new StringBuilder("INSERT INTO ");
+        StringBuilder sql = new StringBuilder();
+        String prefix = "INSERT ";
+        if (database instanceof MySQLDatabase) {
+            prefix = "INSERT IGNORE ";
+        }
+        sql.append(prefix);
+        sql.append("INTO ");
         StringBuilder params = new StringBuilder("VALUES(");
         sql.append(database.escapeTableName(getCatalogName(), getSchemaName(), getTableName()));
         sql.append("(");

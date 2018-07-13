@@ -1,6 +1,9 @@
 package liquibase.sqlgenerator.core;
 
+import java.util.Date;
+
 import liquibase.database.Database;
+import liquibase.database.core.MySQLDatabase;
 import liquibase.datatype.DataTypeFactory;
 import liquibase.exception.ValidationErrors;
 import liquibase.sql.Sql;
@@ -10,8 +13,6 @@ import liquibase.statement.DatabaseFunction;
 import liquibase.statement.core.InsertStatement;
 import liquibase.structure.core.Relation;
 import liquibase.structure.core.Table;
-
-import java.util.Date;
 
 public class InsertGenerator extends AbstractSqlGenerator<InsertStatement> {
 
@@ -31,13 +32,13 @@ public class InsertGenerator extends AbstractSqlGenerator<InsertStatement> {
 
     @Override
     public Sql[] generateSql(InsertStatement statement, Database database, SqlGeneratorChain sqlGeneratorChain) {
-       
+
         StringBuffer sql = new StringBuffer();
-        
+
         if(!previousInsertHasHeader) {
         	generateHeader(sql,statement,database);
         } else {
-            sql.append(",");        	
+            sql.append(",");
         }
         generateValues(sql,statement,database);
 
@@ -45,13 +46,18 @@ public class InsertGenerator extends AbstractSqlGenerator<InsertStatement> {
                 new UnparsedSql(sql.toString(), getAffectedTable(statement))
         };
     }
-    
+
     public void setPreviousInsertStatement(boolean previousInsertHasHeader) {
     	this.previousInsertHasHeader = previousInsertHasHeader;
     }
-    
+
     public void generateHeader(StringBuffer sql,InsertStatement statement, Database database) {
-        sql.append("INSERT INTO " + database.escapeTableName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName()) + " (");
+        String prefix = "INSERT ";
+        if (database instanceof MySQLDatabase) {
+            prefix = "INSERT IGNORE ";
+        }
+        sql.append(prefix);
+        sql.append("INTO " + database.escapeTableName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName()) + " (");
         for (String column : statement.getColumnValues().keySet()) {
             sql.append(database.escapeColumnName(statement.getCatalogName(), statement.getSchemaName(), statement.getTableName(), column)).append(", ");
         }
@@ -68,14 +74,14 @@ public class InsertGenerator extends AbstractSqlGenerator<InsertStatement> {
 
         for (String column : statement.getColumnValues().keySet()) {
             Object newValue = statement.getColumnValues().get(column);
-            if ((newValue == null) || "NULL".equalsIgnoreCase(newValue.toString())) {
+            if (newValue == null || "NULL".equalsIgnoreCase(newValue.toString())) {
                 sql.append("NULL");
-            } else if ((newValue instanceof String) && !looksLikeFunctionCall(((String) newValue), database)) {
+            } else if (newValue instanceof String && !looksLikeFunctionCall((String) newValue, database)) {
                 sql.append(DataTypeFactory.getInstance().fromObject(newValue, database).objectToSql(newValue, database));
             } else if (newValue instanceof Date) {
-                sql.append(database.getDateLiteral(((Date) newValue)));
+                sql.append(database.getDateLiteral((Date) newValue));
             } else if (newValue instanceof Boolean) {
-                if (((Boolean) newValue)) {
+                if ((Boolean) newValue) {
                     sql.append(DataTypeFactory.getInstance().getTrueBooleanValue(database));
                 } else {
                     sql.append(DataTypeFactory.getInstance().getFalseBooleanValue(database));
@@ -96,8 +102,8 @@ public class InsertGenerator extends AbstractSqlGenerator<InsertStatement> {
         }
 
         sql.append(")");
-        
-        
+
+
     }
 
 
