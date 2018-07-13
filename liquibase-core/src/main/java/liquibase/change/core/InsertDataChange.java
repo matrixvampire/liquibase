@@ -172,12 +172,12 @@ public class InsertDataChange extends AbstractChange implements ChangeWithColumn
         inverse.setSchemaName(getSchemaName());
         inverse.setTableName(getTableName());
 
-        for (ColumnConfig column : columns) {
-            if (column.getName().equalsIgnoreCase("id")) {
-                inverse.setWhere(":name = :value");
-                inverse.addWhereParam(column);
-            }
-        }
+//        for (ColumnConfig column : columns) {
+//            if (column.getName().equalsIgnoreCase("id")) {
+//                inverse.setWhere(":name = :value");
+//                inverse.addWhereParam(column);
+//            }
+//        }
         inverses.add(inverse);
         return inverses.toArray(new Change[inverses.size()]);
     }
